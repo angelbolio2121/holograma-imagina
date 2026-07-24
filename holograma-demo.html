@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Holograma IMAGINA</title>
+<style>
+  :root{
+    --cyan: #00e5ff;
+    --cyan-dim: #007a8a;
+    --bg: #02040a;
+  }
+  *{ box-sizing: border-box; }
+  html, body{
+    margin:0; padding:0; height:100%; background: var(--bg);
+    font-family: 'Segoe UI', system-ui, sans-serif; color:#dffcff; overflow:hidden;
+  }
+  #app{ position:relative; width:100vw; height:100vh; }
+
+  /* ---------- topbar ---------- */
+  #topbar{
+    position:absolute; top:0; left:0; right:0; z-index:20;
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 18px; background:linear-gradient(to bottom, rgba(0,0,0,.6), transparent);
+  }
+  #topbar h1{ font-size:15px; letter-spacing:2px; margin:0; color:var(--cyan); font-weight:600; }
+  #modeBtn{
+    background:transparent; border:1px solid var(--cyan-dim); color:var(--cyan);
+    padding:6px 12px; border-radius:20px; font-size:12px; cursor:pointer;
+  }
+  #modeBtn:hover{ background:rgba(0,229,255,0.1); }
+
+  /* ---------- viewport / orb ---------- */
+  #viewport{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  .stage{ position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+
+  .orb{
+    width:180px; height:180px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #9df9ff, #00c2e0 40%, #003b47 100%);
+    box-shadow: 0 0 40px 10px rgba(0,229,255,.35), inset 0 0 40px rgba(255,255,255,.15);
+    animation: idle 4s ease-in-out infinite;
+    transition: box-shadow .3s ease, transform .3s ease;
+    display: none; /* orbe original, ya no se usa; se deja por compatibilidad */
+  }
+
+  /* ---------- avatar ---------- */
+  .avatarWrap{ position:relative; width:340px; max-width:68vw; }
+  .avatarWrap img{
+    width:100%; display:block; pointer-events:none; user-select:none;
+    filter: drop-shadow(0 0 25px rgba(0,229,255,.35));
+    animation: avatarIdle 4.5s ease-in-out infinite;
+    transition: filter .35s ease;
+  }
+  .avatarWrap.speaking img{
+    animation: avatarSpeak .55s ease-in-out infinite;
+    filter: drop-shadow(0 0 45px rgba(0,229,255,.6)) brightness(1.06);
+  }
+  .avatarWrap.listening img{
+    filter: drop-shadow(0 0 40px rgba(0,255,150,.5)) brightness(1.03);
+  }
+  @keyframes avatarIdle{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-6px); } }
+  @keyframes avatarSpeak{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.015); } }
+  .pyramid .avatarWrap{ width:150px; }
+
+  /* ---------- caption ---------- */
+  #captionWrap{
+    position:absolute; bottom:110px; left:0; right:0; z-index:15;
+    display:flex; flex-direction:column; align-items:center; padding:0 24px; text-align:center;
+  }
+  #tag{ font-size:11px; letter-spacing:3px; color:var(--cyan); margin-bottom:8px; opacity:.85; }
+  #caption{ font-size:20px; max-width:640px; line-height:1.4; min-height:28px; }
+
+  /* ---------- controls ---------- */
+  #controls{
+    position:absolute; bottom:0; left:0; right:0; z-index:20;
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    padding:16px 16px 20px; background:linear-gradient(to top, rgba(0,0,0,.7), transparent);
+  }
+  #voiceBtn{
+    display:flex; align-items:center; gap:8px;
+    background: var(--cyan); color:#00232b; border:none; border-radius:30px;
+    padding:12px 22px; font-size:14px; font-weight:600; cursor:pointer;
+  }
+  #voiceBtn.active{ background:#ff5470; color:#2b0007; }
+  #voiceBtn:hover{ filter:brightness(1.1); }
+
+  #textRow{ display:flex; gap:8px; width:100%; max-width:520px; }
+  #input{
+    flex:1; padding:10px 14px; border-radius:20px; border:1px solid var(--cyan-dim);
+    background:rgba(255,255,255,.05); color:#dffcff; font-size:14px; outline:none;
+  }
+  #sendBtn{
+    background:transparent; border:1px solid var(--cyan-dim); color:var(--cyan);
+    border-radius:20px; padding:10px 16px; cursor:pointer; font-size:14px;
+  }
+
+  /* ---------- pyramid mode ---------- */
+  .pyramid .quad{
+    position:absolute; width:50%; height:50%; display:flex; align-items:center; justify-content:center;
+  }
+  .pyramid #quadTop{ top:0; left:25%; transform:rotate(180deg); }
+  .pyramid #quadBottom{ bottom:0; left:25%; }
+  .pyramid #quadLeft{ left:0; top:25%; transform:rotate(90deg); }
+  .pyramid #quadRight{ right:0; top:25%; transform:rotate(-90deg); }
+  .pyramid .quad .capMini{ font-size:12px; max-width:220px; margin-top:8px; text-align:center; }
+  #normalStage{ display:flex; }
+  #pyramidStage{ display:none; }
+  body.pyramid-active #normalStage{ display:none; }
+  body.pyramid-active #pyramidStage{ display:flex; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <h1>◈ IMAGINA · HOLOGRAMA</h1>
+    <button id="modeBtn">Modo Pirámide</button>
+  </div>
+
+  <div id="viewport">
+    <div id="normalStage" class="stage">
+      <div class="avatarWrap" id="orb">
+        <img src="avatar-imagina.webp" alt="Asistente IMAGINA" draggable="false">
+      </div>
+    </div>
+
+    <div id="pyramidStage" class="stage pyramid">
+      <div class="quad" id="quadTop"><div class="avatarWrap" id="orbTop"><img src="avatar-imagina.webp" alt="" draggable="false"></div></div>
+      <div class="quad" id="quadBottom"><div class="avatarWrap" id="orbBottom"><img src="avatar-imagina.webp" alt="" draggable="false"></div></div>
+      <div class="quad" id="quadLeft"><div class="avatarWrap" id="orbLeft"><img src="avatar-imagina.webp" alt="" draggable="false"></div></div>
+      <div class="quad" id="quadRight"><div class="avatarWrap" id="orbRight"><img src="avatar-imagina.webp" alt="" draggable="false"></div></div>
+    </div>
+  </div>
+
+  <div id="captionWrap">
+    <div id="tag">EN ESPERA</div>
+  </div>
+
+  <div id="controls">
+    <button id="voiceBtn">🎙️ Iniciar conversación por voz</button>
+    <div id="textRow">
+      <input id="input" type="text" placeholder="O escribe aquí..." autocomplete="off">
+      <button id="sendBtn">Enviar</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const BACKEND_URL = 'https://holo-backend-pi.vercel.app/api/chat';
+const TTS_URL = 'https://holo-backend-pi.vercel.app/api/tts';
+
+const orb = document.getElementById('orb');
+const orbs = [document.getElementById('orbTop'), document.getElementById('orbBottom'), document.getElementById('orbLeft'), document.getElementById('orbRight')];
+const tag = document.getElementById('tag');
+const modeBtn = document.getElementById('modeBtn');
+const voiceBtn = document.getElementById('voiceBtn');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+
+let history = [];
+let voiceModeOn = false;   // true = conversación automática por voz
+let recognition = null;
+let isListening = false;
+let isBusy = false;        // pensando o hablando
+
+/* ---------- modo pirámide ---------- */
+modeBtn.addEventListener('click', () => {
+  document.body.classList.toggle('pyramid-active');
+  modeBtn.textContent = document.body.classList.contains('pyramid-active') ? 'Modo Normal' : 'Modo Pirámide';
+});
+
+/* ---------- estado visual ---------- */
+function setState(state, text){
+  // state: 'idle' | 'listening' | 'thinking' | 'speaking'
+  const labels = { idle:'EN ESPERA', listening:'ESCUCHANDO', thinking:'PENSANDO', speaking:'IMAGINA' };
+  tag.textContent = labels[state] || state.toUpperCase();
+
+  [orb, ...orbs].forEach(o => {
+    o.classList.remove('speaking','listening');
+    if(state === 'speaking') o.classList.add('speaking');
+    if(state === 'listening') o.classList.add('listening');
+  });
+}
+
+/* ---------- llamada al backend ---------- */
+async function askIMAGINA(userText){
+  history.push({ role:'user', content:userText });
+  const response = await fetch(BACKEND_URL, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ messages: history })
+  });
+  const data = await response.json();
+  if(!response.ok){ throw new Error(data.error || 'Error del backend'); }
+  const textBlock = (data.content || []).find(b => b.type === 'text');
+  const reply = textBlock ? textBlock.text : '(sin respuesta)';
+  history.push({ role:'assistant', content:reply });
+  return reply;
+}
+
+/* ---------- texto a voz (Web Speech API, gratis) ---------- */
+// Guardamos la instancia aquí afuera: si vive solo dentro de la función,
+// Chrome a veces la "limpia" (garbage collection) antes de terminar de hablar
+// y se queda en silencio sin avisar.
+let currentUtterance = null;
+let cachedVoices = [];
+
+function refreshVoices(){
+  const v = speechSynthesis.getVoices();
+  if(v && v.length) cachedVoices = v;
+}
+if('speechSynthesis' in window){
+  refreshVoices();
+  speechSynthesis.onvoiceschanged = refreshVoices;
+}
+
+function cleanForSpeech(text){
+  return text
+    .replace(/\*\*/g, '')
+    .replace(/[*_#`~]/g, '')
+    .replace(/^[-•]\s*/gm, '')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/* ---------- voz natural con ElevenLabs, con respaldo del navegador ---------- */
+async function fetchElevenLabsAudio(text){
+  const response = await fetch(TTS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text })
+  });
+  if(!response.ok){
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Error de ElevenLabs');
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
+function playAudioUrl(url){
+  return new Promise((resolve, reject) => {
+    const audio = new Audio(url);
+    const keepAlive = setInterval(() => { if(audio.paused && !audio.ended) audio.play().catch(()=>{}); }, 4000);
+    audio.onended = () => { clearInterval(keepAlive); URL.revokeObjectURL(url); resolve(); };
+    audio.onerror = (e) => { clearInterval(keepAlive); URL.revokeObjectURL(url); reject(e); };
+    audio.play().catch(reject);
+  });
+}
+
+function speakWithBrowser(spokenText, displayText){
+  return new Promise((resolve) => {
+    if(!('speechSynthesis' in window)){ resolve(); return; }
+    speechSynthesis.cancel();
+    currentUtterance = new SpeechSynthesisUtterance(spokenText);
+    currentUtterance.lang = 'es-MX';
+    currentUtterance.rate = 1.02;
+    const esVoice = cachedVoices.find(v => v.lang && v.lang.startsWith('es'));
+    if(esVoice) currentUtterance.voice = esVoice;
+    const keepAlive = setInterval(() => {
+      if(speechSynthesis.speaking){ speechSynthesis.pause(); speechSynthesis.resume(); }
+      else clearInterval(keepAlive);
+    }, 10000);
+    currentUtterance.onend = () => { clearInterval(keepAlive); currentUtterance = null; resolve(); };
+    currentUtterance.onerror = () => { clearInterval(keepAlive); currentUtterance = null; resolve(); };
+    speechSynthesis.speak(currentUtterance);
+  });
+}
+
+async function speak(text){
+  const spokenText = cleanForSpeech(text);
+  isBusy = true;
+  setState('speaking', text);
+  try{
+    const audioUrl = await fetchElevenLabsAudio(spokenText);
+    await playAudioUrl(audioUrl);
+  }catch(err){
+    console.warn('ElevenLabs no disponible, usando voz del navegador de respaldo:', err.message);
+    await speakWithBrowser(spokenText, text);
+  }
+  isBusy = false;
+}
+
+/* ---------- flujo compartido: usuario habló/escribió ---------- */
+async function handleUserTurn(text){
+  if(!text || !text.trim()) return;
+  isBusy = true;
+  setState('thinking', text);
+  try{
+    const reply = await askIMAGINA(text.trim());
+    await speak(reply);
+  }catch(err){
+    setState('idle', 'Error: ' + err.message);
+    isBusy = false;
+    console.error(err);
+  }
+  // si el modo voz sigue activo, vuelve a escuchar automáticamente
+  if(voiceModeOn) startListening();
+  else setState('idle', 'Toca el micrófono o escribe para hablar con el asistente de IMAGINA.');
+}
+
+/* ---------- voz a texto (Web Speech API, gratis) ---------- */
+function getRecognition(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return null;
+  const r = new SR();
+  r.lang = 'es-MX';
+  r.continuous = false;      // una intervención por vez
+  r.interimResults = true;   // subtítulos en vivo mientras habla
+  r.maxAlternatives = 1;
+  return r;
+}
+
+function startListening(){
+  if(!voiceModeOn || isBusy) return;
+  if(isListening) return; // ya está escuchando, no reiniciar
+  if(!recognition) recognition = getRecognition();
+  if(!recognition){
+    setState('idle', 'Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge, o escribe abajo.');
+    return;
+  }
+  isListening = true;
+  setState('listening', 'Escuchando...');
+
+  recognition.onresult = (event) => {
+    let interim = '';
+    let final = '';
+    for(let i = event.resultIndex; i < event.results.length; i++){
+      const t = event.results[i][0].transcript;
+      if(event.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    // (ya no mostramos texto en pantalla; la transcripción sigue viva
+    // internamente, solo no se despliega en la interfaz)
+    if(final){
+      isListening = false;
+      try{ recognition.stop(); }catch(e){}
+      handleUserTurn(final);
+    }
+  };
+
+  recognition.onerror = (e) => {
+    isListening = false;
+    if(e.error === 'no-speech' && voiceModeOn && !isBusy){
+      // nadie habló, vuelve a intentar
+      startListening();
+    }else if(e.error !== 'aborted'){
+      setState('idle', 'No se detectó audio. Toca el micrófono para intentar de nuevo.');
+    }
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    // si terminó sin resultado final y el modo sigue activo, reintenta
+    if(voiceModeOn && !isBusy){
+      setTimeout(() => { if(voiceModeOn && !isBusy) startListening(); }, 300);
+    }
+  };
+
+  try{ recognition.start(); }catch(e){ /* ya estaba iniciado */ }
+}
+
+function stopListening(){
+  if(recognition){ recognition.onend = null; recognition.onerror = null; try{ recognition.stop(); }catch(e){} }
+  isListening = false;
+}
+
+/* ---------- botón principal de voz ---------- */
+voiceBtn.addEventListener('click', () => {
+  voiceModeOn = !voiceModeOn;
+  if(voiceModeOn){
+    // "Desbloquea" el audio de síntesis de voz aquí mismo, en el clic.
+    // Si no se hace esto dentro del gesto del usuario, Chrome deja mudas
+    // las voces que se disparan después automáticamente (sin clic).
+    if('speechSynthesis' in window){
+      speechSynthesis.cancel();
+      const unlock = new SpeechSynthesisUtterance(' ');
+      unlock.volume = 0;
+      speechSynthesis.speak(unlock);
+    }
+    // Desbloquea también el reproductor de audio normal (para ElevenLabs),
+    // igual que arriba: si no se hace en el clic, el audio que llega después
+    // de una llamada al backend puede quedar mudo en Chrome.
+    const silentAudio = new Audio();
+    silentAudio.play().catch(()=>{});
+    voiceBtn.textContent = '⏹️ Terminar conversación';
+    voiceBtn.classList.add('active');
+    startListening();
+  }else{
+    voiceBtn.textContent = '🎙️ Iniciar conversación por voz';
+    voiceBtn.classList.remove('active');
+    stopListening();
+    speechSynthesis.cancel();
+    isBusy = false;
+    setState('idle', 'Conversación por voz detenida.');
+  }
+});
+
+/* ---------- texto manual (siempre disponible como respaldo) ---------- */
+async function sendText(){
+  const text = input.value.trim();
+  if(!text || isBusy) return;
+  input.value = '';
+  await handleUserTurn(text);
+}
+sendBtn.addEventListener('click', sendText);
+input.addEventListener('keydown', (e) => { if(e.key === 'Enter') sendText(); });
+
+setState('idle');
+</script>
+</body>
+</html>
