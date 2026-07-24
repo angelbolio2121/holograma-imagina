@@ -185,21 +185,54 @@ async function askIMAGINA(userText){
 }
 
 /* ---------- texto a voz (Web Speech API, gratis) ---------- */
+// Guardamos la instancia aquí afuera: si vive solo dentro de la función,
+// Chrome a veces la "limpia" (garbage collection) antes de terminar de hablar
+// y se queda en silencio sin avisar.
+let currentUtterance = null;
+let cachedVoices = [];
+
+function refreshVoices(){
+  const v = speechSynthesis.getVoices();
+  if(v && v.length) cachedVoices = v;
+}
+if('speechSynthesis' in window){
+  refreshVoices();
+  speechSynthesis.onvoiceschanged = refreshVoices;
+}
+
+function cleanForSpeech(text){
+  return text
+    .replace(/\*\*/g, '')
+    .replace(/[*_#`~]/g, '')
+    .replace(/^[-•]\s*/gm, '')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function speak(text){
   return new Promise((resolve) => {
     if(!('speechSynthesis' in window)){ resolve(); return; }
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'es-MX';
-    utter.rate = 1.02;
-    const voices = speechSynthesis.getVoices();
-    const esVoice = voices.find(v => v.lang && v.lang.startsWith('es'));
-    if(esVoice) utter.voice = esVoice;
+    speechSynthesis.cancel();
+    const spokenText = cleanForSpeech(text);
+    currentUtterance = new SpeechSynthesisUtterance(spokenText);
+    currentUtterance.lang = 'es-MX';
+    currentUtterance.rate = 1.02;
+    const esVoice = cachedVoices.find(v => v.lang && v.lang.startsWith('es'));
+    if(esVoice) currentUtterance.voice = esVoice;
     isBusy = true;
     setState('speaking', text);
-    utter.onend = () => { isBusy = false; resolve(); };
-    utter.onerror = () => { isBusy = false; resolve(); };
-    speechSynthesis.cancel();
-    speechSynthesis.speak(utter);
+
+    // Chrome corta el audio si habla más de ~15s seguidos; este watchdog
+    // lo "despierta" cada 10s mientras siga hablando.
+    const keepAlive = setInterval(() => {
+      if(speechSynthesis.speaking){ speechSynthesis.pause(); speechSynthesis.resume(); }
+      else clearInterval(keepAlive);
+    }, 10000);
+
+    currentUtterance.onend = () => { clearInterval(keepAlive); isBusy = false; currentUtterance = null; resolve(); };
+    currentUtterance.onerror = () => { clearInterval(keepAlive); isBusy = false; currentUtterance = null; resolve(); };
+    speechSynthesis.speak(currentUtterance);
   });
 }
 
@@ -235,7 +268,8 @@ function getRecognition(){
 
 function startListening(){
   if(!voiceModeOn || isBusy) return;
-  recognition = getRecognition();
+  if(isListening) return; // ya está escuchando, no reiniciar
+  if(!recognition) recognition = getRecognition();
   if(!recognition){
     setState('idle', 'Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge, o escribe abajo.');
     return;
