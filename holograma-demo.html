@@ -288,6 +288,7 @@ function startListening(){
     if(interim) caption.textContent = interim;
     if(final){
       isListening = false;
+      try{ recognition.stop(); }catch(e){}
       handleUserTurn(final);
     }
   };
@@ -322,6 +323,15 @@ function stopListening(){
 voiceBtn.addEventListener('click', () => {
   voiceModeOn = !voiceModeOn;
   if(voiceModeOn){
+    // "Desbloquea" el audio de síntesis de voz aquí mismo, en el clic.
+    // Si no se hace esto dentro del gesto del usuario, Chrome deja mudas
+    // las voces que se disparan después automáticamente (sin clic).
+    if('speechSynthesis' in window){
+      speechSynthesis.cancel();
+      const unlock = new SpeechSynthesisUtterance(' ');
+      unlock.volume = 0;
+      speechSynthesis.speak(unlock);
+    }
     voiceBtn.textContent = '⏹️ Terminar conversación';
     voiceBtn.classList.add('active');
     startListening();
