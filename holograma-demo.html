@@ -230,31 +230,17 @@ function cleanForSpeech(text){
     .trim();
 }
 
-/* ---------- voz natural con ElevenLabs, con respaldo del navegador ---------- */
-async function fetchElevenLabsAudio(text){
-  const response = await fetch(TTS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text })
-  });
-  if(!response.ok){
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || 'Error de ElevenLabs');
-  }
-  const blob = await response.blob();
-  return URL.createObjectURL(blob);
-}
-
-function playAudioUrl(url){
+/* ---------- voz con ElevenLabs en streaming progresivo ---------- */
+function playTTS(text){
   return new Promise((resolve, reject) => {
+    const url = TTS_URL + '?text=' + encodeURIComponent(text);
     const audio = new Audio(url);
-    const keepAlive = setInterval(() => { if(audio.paused && !audio.ended) audio.play().catch(()=>{}); }, 4000);
-    audio.onended = () => { clearInterval(keepAlive); URL.revokeObjectURL(url); resolve(); };
-    audio.onerror = (e) => { clearInterval(keepAlive); URL.revokeObjectURL(url); reject(e); };
+    audio.preload = 'auto';
+    audio.onended = () => resolve();
+    audio.onerror = () => reject(new Error('No se pudo reproducir el audio'));
     audio.play().catch(reject);
   });
 }
-
 function speakWithBrowser(spokenText, displayText){
   return new Promise((resolve) => {
     if(!('speechSynthesis' in window)){ resolve(); return; }
@@ -279,8 +265,7 @@ async function speak(text){
   isBusy = true;
   setState('speaking', text);
   try{
-    const audioUrl = await fetchElevenLabsAudio(spokenText);
-    await playAudioUrl(audioUrl);
+    await playTTS(spokenText);
   }catch(err){
     console.warn('ElevenLabs no disponible, usando voz del navegador de respaldo:', err.message);
     await speakWithBrowser(spokenText, text);
@@ -376,6 +361,7 @@ function stopListening(){
 voiceBtn.addEventListener('click', () => {
   voiceModeOn = !voiceModeOn;
   if(voiceModeOn){
+    warmUp();
     // "Desbloquea" el audio de síntesis de voz aquí mismo, en el clic.
     // Si no se hace esto dentro del gesto del usuario, Chrome deja mudas
     // las voces que se disparan después automáticamente (sin clic).
@@ -412,7 +398,13 @@ async function sendText(){
 }
 sendBtn.addEventListener('click', sendText);
 input.addEventListener('keydown', (e) => { if(e.key === 'Enter') sendText(); });
-
+/* ---------- calentar funciones para evitar cold start ---------- */
+function warmUp(){
+  fetch(BACKEND_URL + '?ping=1').catch(()=>{});
+  fetch(TTS_URL + '?ping=1').catch(()=>{});
+}
+warmUp();
+setInterval(warmUp, 240000);
 setState('idle');
 </script>
 </body>
