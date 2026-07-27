@@ -248,16 +248,38 @@ function cleanForSpeech(text){
     .trim();
 }
 
-/* ---------- voz con ElevenLabs en streaming progresivo ---------- */
-function playTTS(text){
+/* ---------- reproductor unico y desbloqueado (obligatorio en iPhone) ---------- */
+const player = new Audio();
+player.preload = 'auto';
+let audioDesbloqueado = false;
+
+function desbloquearAudio(){
+  if(audioDesbloqueado) return;
+  audioDesbloqueado = true;
+  // iOS solo permite reproducir audio con un elemento que se "tocó"
+  // dentro de un gesto del usuario. Este silencio lo deja habilitado
+  // para todas las reproducciones que vengan despues.
+  player.src = 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA';
+  player.play().then(()=>{ player.pause(); player.currentTime = 0; }).catch(()=>{});
+  if('speechSynthesis' in window){
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    speechSynthesis.speak(u);
+  }
+}
+
+function reproducirUrl(url){
   return new Promise((resolve, reject) => {
-    const url = TTS_URL + '?text=' + encodeURIComponent(text);
-    const audio = new Audio(url);
-    audio.preload = 'auto';
-    audio.onended = () => resolve();
-    audio.onerror = () => reject(new Error('No se pudo reproducir el audio'));
-    audio.play().catch(reject);
+    player.onended = () => resolve();
+    player.onerror = () => reject(new Error('No se pudo reproducir el audio'));
+    player.src = url;
+    player.play().catch(reject);
   });
+}
+
+function playTTS(text){
+  return reproducirUrl(TTS_URL + '?text=' + encodeURIComponent(text));
 }
 function speakWithBrowser(spokenText, displayText){
   return new Promise((resolve) => {
