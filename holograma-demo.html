@@ -48,7 +48,17 @@
 
   /* ---------- avatar ---------- */
 .avatarWrap{ position:relative; width:380px; max-width:70vw; }
-.avatarWrap img{
+.avatarVid{
+    position:absolute; top:0; left:0;
+    width:100%; height:auto; display:block;
+    object-fit:contain; pointer-events:none;
+    opacity:0; transition:opacity .25s ease;
+    mix-blend-mode:screen;
+    filter: drop-shadow(0 0 25px rgba(0,229,255,.35));
+  }
+  .avatarVid.activo{ opacity:1; }
+  .avatarWrap{ min-height:60vh; }
+  .avatarWrap img{
   width:100%; max-height:62vh; object-fit:contain; margin:0 auto;
     display:block; pointer-events:none; user-select:none;
     filter: drop-shadow(0 0 25px rgba(0,229,255,.35));
@@ -126,7 +136,8 @@
   <div id="viewport">
     <div id="normalStage" class="stage">
       <div class="avatarWrap" id="orb">
-        <img src="avatar-imagina.webp?v=3" alt="Asistente IMAGINA" draggable="false">
+       <video id="vidEspera" class="avatarVid activo" src="avatar-espera.mp4" muted loop playsinline autoplay preload="auto"></video>
+        <video id="vidHablando" class="avatarVid" src="avatar-hablando.mp4" muted loop playsinline autoplay preload="auto"></video>
       </div>
     </div>
 
@@ -181,7 +192,13 @@ function setState(state, text){
   // state: 'idle' | 'listening' | 'thinking' | 'speaking'
   const labels = { idle:'EN ESPERA', listening:'ESCUCHANDO', thinking:'PENSANDO', speaking:'IMAGINA' };
   tag.textContent = labels[state] || state.toUpperCase();
-
+const hablando = (state === 'speaking');
+  const ve = document.getElementById('vidEspera');
+  const vh = document.getElementById('vidHablando');
+  if(ve && vh){
+    ve.classList.toggle('activo', !hablando);
+    vh.classList.toggle('activo', hablando);
+  }
   [orb, ...orbs].forEach(o => {
     o.classList.remove('speaking','listening');
     if(state === 'speaking') o.classList.add('speaking');
