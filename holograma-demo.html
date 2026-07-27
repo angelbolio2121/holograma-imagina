@@ -47,9 +47,10 @@
   }
 
   /* ---------- avatar ---------- */
-  .avatarWrap{ position:relative; width:480px; max-width:82vw; }
-  .avatarWrap img{
-    width:100%; display:block; pointer-events:none; user-select:none;
+.avatarWrap{ position:relative; width:380px; max-width:70vw; }
+.avatarWrap img{
+  width:100%; max-height:62vh; object-fit:contain; margin:0 auto;
+    display:block; pointer-events:none; user-select:none;
     filter: drop-shadow(0 0 25px rgba(0,229,255,.35));
     animation: avatarIdle 4.5s ease-in-out infinite;
     transition: filter .35s ease;
@@ -125,15 +126,15 @@
   <div id="viewport">
     <div id="normalStage" class="stage">
       <div class="avatarWrap" id="orb">
-        <img src="avatar-imagina.webp" alt="Asistente IMAGINA" draggable="false">
+        <img src="avatar-imagina.webp?v=3" alt="Asistente IMAGINA" draggable="false">
       </div>
     </div>
 
     <div id="pyramidStage" class="stage pyramid">
-      <div class="quad" id="quadTop"><div class="avatarWrap" id="orbTop"><img src="avatar-imagina.webp" alt="" draggable="false"></div></div>
-      <div class="quad" id="quadBottom"><div class="avatarWrap" id="orbBottom"><img src="avatar-imagina.webp" alt="" draggable="false"></div></div>
-      <div class="quad" id="quadLeft"><div class="avatarWrap" id="orbLeft"><img src="avatar-imagina.webp" alt="" draggable="false"></div></div>
-      <div class="quad" id="quadRight"><div class="avatarWrap" id="orbRight"><img src="avatar-imagina.webp" alt="" draggable="false"></div></div>
+      <div class="quad" id="quadTop"><div class="avatarWrap" id="orbTop"><img src="avatar-imagina.webp?v=3" alt="" draggable="false"></div></div>
+      <div class="quad" id="quadBottom"><div class="avatarWrap" id="orbBottom"><img src="avatar-imagina.webp?v=3" alt="" draggable="false"></div></div>
+      <div class="quad" id="quadLeft"><div class="avatarWrap" id="orbLeft"><img src="avatar-imagina.webp?v=3" alt="" draggable="false"></div></div>
+      <div class="quad" id="quadRight"><div class="avatarWrap" id="orbRight"><img src="avatar-imagina.webp?v=3" alt="" draggable="false"></div></div>
     </div>
   </div>
 
