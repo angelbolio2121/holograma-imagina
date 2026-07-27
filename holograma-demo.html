@@ -273,22 +273,112 @@ async function speak(text){
   isBusy = false;
 }
 
+/* ---------- cola de voz: habla frase por frase ---------- */
+let audioQueue = [];
+let queuePlaying = false;
+let streamDone = false;
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+function findSentenceEnd(text){
+  const re = /[.!?…]["')\]]?(\s|$)/g;
+  let last = 0, m;
+  while((m = re.exec(text)) !== null){ last = m.index + m[0].length; }
+  return last >= 20 ? last : 0;
+}
+
+function enqueueSpeech(sentence){
+  const clean = cleanForSpeech(sentence);
+  if(!clean) return;
+  const audio = new Audio(TTS_URL + '?text=' + encodeURIComponent(clean));
+  audio.preload = 'auto';
+  audio.load();
+  audioQueue.push(audio);
+  if(!queuePlaying) playQueue();
+}
+
+async function playQueue(){
+  queuePlaying = true;
+  setState('speaking');
+  while(audioQueue.length || !streamDone){
+    if(!audioQueue.length){ await sleep(60); continue; }
+    const audio = audioQueue.shift();
+    await new Promise((resolve) => {
+      audio.onended = resolve;
+      audio.onerror = resolve;
+      audio.play().catch(resolve);
+    });
+  }
+  queuePlaying = false;
+}
+
+async function streamIMAGINA(userText){
+  history.push({ role:'user', content:userText });
+  const response = await fetch(BACKEND_URL, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ messages: history, stream: true })
+  });
+  if(!response.ok || !response.body) throw new Error('El backend no respondio en streaming');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '', full = '', pending = '';
+
+  while(true){
+    const { done, value } = await reader.read();
+    if(done) break;
+    buffer += decoder.decode(value, { stream:true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for(const line of lines){
+      if(!line.startsWith('data:')) continue;
+      const raw = line.slice(5).trim();
+      if(!raw) continue;
+      let evt;
+      try{ evt = JSON.parse(raw); }catch(e){ continue; }
+      if(evt.type === 'content_block_delta' && evt.delta && evt.delta.text){
+        full += evt.delta.text;
+        pending += evt.delta.text;
+        const cut = findSentenceEnd(pending);
+        if(cut > 0){ enqueueSpeech(pending.slice(0, cut)); pending = pending.slice(cut); }
+      }
+    }
+  }
+  if(pending.trim()) enqueueSpeech(pending);
+  history.push({ role:'assistant', content: full || '(sin respuesta)' });
+  return full;
+}
+
 /* ---------- flujo compartido: usuario habló/escribió ---------- */
 async function handleUserTurn(text){
   if(!text || !text.trim()) return;
   isBusy = true;
   setState('thinking', text);
+  audioQueue = [];
+  queuePlaying = false;
+  streamDone = false;
+
   try{
-    const reply = await askIMAGINA(text.trim());
-    await speak(reply);
+    await streamIMAGINA(text.trim());
+    streamDone = true;
+    while(queuePlaying) await sleep(80);
   }catch(err){
-    setState('idle', 'Error: ' + err.message);
-    isBusy = false;
-    console.error(err);
+    streamDone = true;
+    console.warn('Streaming fallo, usando modo normal:', err.message);
+    try{
+      history.pop();
+      const reply = await askIMAGINA(text.trim());
+      await speak(reply);
+    }catch(e2){
+      setState('idle', 'Error: ' + e2.message);
+      console.error(e2);
+    }
   }
-  // si el modo voz sigue activo, vuelve a escuchar automáticamente
+
+  isBusy = false;
   if(voiceModeOn) startListening();
-  else setState('idle', 'Toca el micrófono o escribe para hablar con el asistente de IMAGINA.');
+  else setState('idle', '');
 }
 
 /* ---------- voz a texto (Web Speech API, gratis) ---------- */
