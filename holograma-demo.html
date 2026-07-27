@@ -280,11 +280,27 @@ let streamDone = false;
 
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
+let firstChunkSent = false;
+
 function findSentenceEnd(text){
+  const minSentence = firstChunkSent ? 20 : 12;
+  const softMax = firstChunkSent ? 120 : 45;
+
   const re = /[.!?…]["')\]]?(\s|$)/g;
   let last = 0, m;
   while((m = re.exec(text)) !== null){ last = m.index + m[0].length; }
-  return last >= 20 ? last : 0;
+  if(last >= minSentence){ firstChunkSent = true; return last; }
+
+  if(text.length >= softMax){
+    const soft = /[,;:](\s|$)/g;
+    let softLast = 0, s;
+    while((s = soft.exec(text)) !== null){
+      const end = s.index + s[0].length;
+      if(end >= 25) softLast = end;
+    }
+    if(softLast > 0){ firstChunkSent = true; return softLast; }
+  }
+  return 0;
 }
 
 function enqueueSpeech(sentence){
@@ -358,7 +374,7 @@ async function handleUserTurn(text){
   audioQueue = [];
   queuePlaying = false;
   streamDone = false;
-
+  firstChunkSent = false;
   try{
     await streamIMAGINA(text.trim());
     streamDone = true;
