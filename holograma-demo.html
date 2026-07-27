@@ -346,10 +346,9 @@ function findSentenceEnd(text){
 function enqueueSpeech(sentence){
   const clean = cleanForSpeech(sentence);
   if(!clean) return;
-  const audio = new Audio(TTS_URL + '?text=' + encodeURIComponent(clean));
-  audio.preload = 'auto';
-  audio.load();
-  audioQueue.push(audio);
+  const url = TTS_URL + '?text=' + encodeURIComponent(clean);
+  fetch(url).catch(()=>{});
+  audioQueue.push(url);
   if(!queuePlaying) playQueue();
 }
 
@@ -358,12 +357,8 @@ async function playQueue(){
   setState('speaking');
   while(audioQueue.length || !streamDone){
     if(!audioQueue.length){ await sleep(60); continue; }
-    const audio = audioQueue.shift();
-    await new Promise((resolve) => {
-      audio.onended = resolve;
-      audio.onerror = resolve;
-      audio.play().catch(resolve);
-    });
+    const url = audioQueue.shift();
+    try{ await reproducirUrl(url); }catch(e){ }
   }
   queuePlaying = false;
 }
@@ -520,8 +515,7 @@ voiceBtn.addEventListener('click', () => {
     // Desbloquea también el reproductor de audio normal (para ElevenLabs),
     // igual que arriba: si no se hace en el clic, el audio que llega después
     // de una llamada al backend puede quedar mudo en Chrome.
-    const silentAudio = new Audio();
-    silentAudio.play().catch(()=>{});
+  desbloquearAudio();
     voiceBtn.textContent = '⏹️ Terminar conversación';
     voiceBtn.classList.add('active');
     startListening();
@@ -539,6 +533,7 @@ voiceBtn.addEventListener('click', () => {
 async function sendText(){
   const text = input.value.trim();
   if(!text || isBusy) return;
+  desbloquearAudio();
   input.value = '';
   await handleUserTurn(text);
 }
